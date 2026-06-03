@@ -96,7 +96,7 @@ func (h *CRUDHandler[R]) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if accessor, ok := any(item).(resource.ResourceAccessor); ok {
-		accessor.(*resource.Resource).OrgID = orgID
+		accessor.SetOrgID(orgID)
 	}
 
 	if h.Hooks != nil && h.ResourceType != "" {
