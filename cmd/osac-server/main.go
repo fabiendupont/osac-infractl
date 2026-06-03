@@ -134,9 +134,10 @@ func main() {
 		wp.RegisterActions(dispatchTable)
 	}
 
-	// Create the dispatcher that wires lifecycle events to the executor.
+	// Create the dispatcher and register hooks so lifecycle events
+	// trigger workflow execution.
 	dispatcher := workflow.NewDispatcher(dispatchTable, executor, logger)
-	_ = dispatcher
+	dispatcher.RegisterHooks(registry)
 
 	// --- HTTP Server ---
 	addr := os.Getenv("OSAC_ADDR")

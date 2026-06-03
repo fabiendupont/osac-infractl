@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/fabiendupont/infractl/auth"
+	"github.com/fabiendupont/infractl/provider"
 	"github.com/fabiendupont/infractl/resource"
 )
 
@@ -22,19 +23,25 @@ import (
 // with default status set.
 type ResourceFactory[R any] func() *R
 
-// SetOrgID sets the org_id on a resource. Since Go generics can't
-// express "R has an OrgID field", this is provided as a function.
-type SetOrgID[R any] func(r *R, orgID string)
-
 // CRUDHandler provides standard CRUD HTTP handlers for any resource type.
+// If Hooks is set, lifecycle events are fired after successful mutations.
 type CRUDHandler[R any] struct {
-	Store   resource.Store[R]
-	NewItem ResourceFactory[R]
+	Store        resource.Store[R]
+	NewItem      ResourceFactory[R]
+	Hooks        provider.HookFirer
+	ResourceType string
 }
 
 // NewCRUDHandler creates a handler set for the given store.
 func NewCRUDHandler[R any](store resource.Store[R], factory ResourceFactory[R]) *CRUDHandler[R] {
 	return &CRUDHandler[R]{Store: store, NewItem: factory}
+}
+
+// WithHooks sets the hook firer and resource type for lifecycle events.
+func (h *CRUDHandler[R]) WithHooks(hooks provider.HookFirer, resourceType string) *CRUDHandler[R] {
+	h.Hooks = hooks
+	h.ResourceType = resourceType
+	return h
 }
 
 func (h *CRUDHandler[R]) List(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +98,14 @@ func (h *CRUDHandler[R]) Create(w http.ResponseWriter, r *http.Request) {
 	if accessor, ok := any(item).(resource.ResourceAccessor); ok {
 		accessor.(*resource.Resource).OrgID = orgID
 	}
+
+	if h.Hooks != nil && h.ResourceType != "" {
+		if err := h.Hooks.FireSync(r.Context(), h.ResourceType, "pre_create", item); err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
 	if err := h.Store.Create(r.Context(), item); err != nil {
 		if errors.Is(err, resource.ErrAlreadyExists) {
 			http.Error(w, "already exists", http.StatusConflict)
@@ -99,6 +114,11 @@ func (h *CRUDHandler[R]) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if h.Hooks != nil && h.ResourceType != "" {
+		h.Hooks.FireAsync(r.Context(), h.ResourceType, "post_create", item)
+	}
+
 	writeJSON(w, http.StatusCreated, item)
 }
 
@@ -121,6 +141,14 @@ func (h *CRUDHandler[R]) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if h.Hooks != nil && h.ResourceType != "" {
+		if err := h.Hooks.FireSync(r.Context(), h.ResourceType, "pre_update", existing); err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
 	if err := h.Store.Update(r.Context(), existing); err != nil {
 		if errors.Is(err, resource.ErrConflict) {
 			http.Error(w, "conflict", http.StatusConflict)
@@ -129,6 +157,11 @@ func (h *CRUDHandler[R]) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if h.Hooks != nil && h.ResourceType != "" {
+		h.Hooks.FireAsync(r.Context(), h.ResourceType, "post_update", existing)
+	}
+
 	writeJSON(w, http.StatusOK, existing)
 }
 
@@ -138,7 +171,18 @@ func (h *CRUDHandler[R]) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := h.Store.Delete(r.Context(), orgID, chi.URLParam(r, "name")); err != nil {
+	name := chi.URLParam(r, "name")
+
+	if h.Hooks != nil && h.ResourceType != "" {
+		if err := h.Hooks.FireSync(r.Context(), h.ResourceType, "pre_delete", map[string]interface{}{
+			"org_id": orgID.String(), "name": name,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	if err := h.Store.Delete(r.Context(), orgID, name); err != nil {
 		if errors.Is(err, resource.ErrNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -147,9 +191,20 @@ func (h *CRUDHandler[R]) Delete(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
+		if errors.Is(err, resource.ErrHasChildren) {
+			http.Error(w, "has children", http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if h.Hooks != nil && h.ResourceType != "" {
+		h.Hooks.FireAsync(r.Context(), h.ResourceType, "post_delete", map[string]interface{}{
+			"org_id": orgID.String(), "name": name,
+		})
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -38,6 +38,9 @@ func (p *VirtualNetworkProvider) Init(ctx provider.Context) error {
 	p.crud = handlers.NewCRUDHandler[VirtualNetwork](store, func() *VirtualNetwork {
 		return &VirtualNetwork{Status: resource.JSONField[VirtualNetworkStatus]{Data: VirtualNetworkStatus{Phase: "Pending"}}}
 	})
+	if ctx.Hooks != nil {
+		p.crud.WithHooks(ctx.Hooks, ResourceType)
+	}
 	if err := ctx.DB.AutoMigrate(&VirtualNetwork{}); err != nil {
 		return err
 	}

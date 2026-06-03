@@ -38,6 +38,9 @@ func (p *SubnetProvider) Init(ctx provider.Context) error {
 	p.crud = handlers.NewCRUDHandler[Subnet](store, func() *Subnet {
 		return &Subnet{Status: resource.JSONField[SubnetStatus]{Data: SubnetStatus{Phase: "Pending"}}}
 	})
+	if ctx.Hooks != nil {
+		p.crud.WithHooks(ctx.Hooks, ResourceType)
+	}
 	if err := ctx.DB.AutoMigrate(&Subnet{}); err != nil {
 		return err
 	}

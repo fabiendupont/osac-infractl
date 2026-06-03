@@ -38,6 +38,9 @@ func (p *ClusterProvider) Init(ctx provider.Context) error {
 	p.crud = handlers.NewCRUDHandler[Cluster](store, func() *Cluster {
 		return &Cluster{Status: resource.JSONField[ClusterStatus]{Data: ClusterStatus{Phase: "Progressing"}}}
 	})
+	if ctx.Hooks != nil {
+		p.crud.WithHooks(ctx.Hooks, ResourceType)
+	}
 	if err := ctx.DB.AutoMigrate(&Cluster{}); err != nil {
 		return err
 	}

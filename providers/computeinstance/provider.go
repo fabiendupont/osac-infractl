@@ -38,6 +38,9 @@ func (p *ComputeInstanceProvider) Init(ctx provider.Context) error {
 	p.crud = handlers.NewCRUDHandler[ComputeInstance](store, func() *ComputeInstance {
 		return &ComputeInstance{Status: resource.JSONField[ComputeInstanceStatus]{Data: ComputeInstanceStatus{Phase: "Starting"}}}
 	})
+	if ctx.Hooks != nil {
+		p.crud.WithHooks(ctx.Hooks, ResourceType)
+	}
 	if err := ctx.DB.AutoMigrate(&ComputeInstance{}); err != nil {
 		return err
 	}

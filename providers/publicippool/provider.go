@@ -38,6 +38,9 @@ func (p *PublicIPPoolProvider) Init(ctx provider.Context) error {
 	p.crud = handlers.NewCRUDHandler[PublicIPPool](store, func() *PublicIPPool {
 		return &PublicIPPool{Status: resource.JSONField[PublicIPPoolStatus]{Data: PublicIPPoolStatus{Phase: "Pending"}}}
 	})
+	if ctx.Hooks != nil {
+		p.crud.WithHooks(ctx.Hooks, ResourceType)
+	}
 	if err := ctx.DB.AutoMigrate(&PublicIPPool{}); err != nil {
 		return err
 	}

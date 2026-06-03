@@ -38,6 +38,9 @@ func (p *SecurityGroupProvider) Init(ctx provider.Context) error {
 	p.crud = handlers.NewCRUDHandler[SecurityGroup](store, func() *SecurityGroup {
 		return &SecurityGroup{Status: resource.JSONField[SecurityGroupStatus]{Data: SecurityGroupStatus{Phase: "Pending"}}}
 	})
+	if ctx.Hooks != nil {
+		p.crud.WithHooks(ctx.Hooks, ResourceType)
+	}
 	if err := ctx.DB.AutoMigrate(&SecurityGroup{}); err != nil {
 		return err
 	}
