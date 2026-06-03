@@ -32,6 +32,7 @@ import (
 
 	aap "github.com/fabiendupont/infractl-executor-aap"
 
+	"github.com/osac-project/osac-infractl/handlers"
 	"github.com/osac-project/osac-infractl/providers/cluster"
 	"github.com/osac-project/osac-infractl/providers/computeinstance"
 	"github.com/osac-project/osac-infractl/providers/hosttype"
@@ -139,22 +140,17 @@ func main() {
 	dispatcher := workflow.NewDispatcher(dispatchTable, executor, logger)
 	dispatcher.RegisterHooks(registry)
 
-	// Status polling callback — updates resource status when workflows complete.
-	statusCallback := func(ctx context.Context, tracked workflow.TrackedRun, run *workflow.Run) error {
-		phase := "Ready"
-		if run.Status == workflow.RunFailed {
-			phase = "Failed"
-		}
-		logger.Info().
-			Str("resource_type", tracked.ResourceType).
-			Str("name", tracked.Name).
-			Str("phase", phase).
-			Msg("workflow completed, updating resource status")
-		// Status updates will be wired to PartialUpdate per resource type
-		// once resource type → store mapping is implemented.
-		return nil
-	}
-	_ = statusCallback
+	// Register status updaters for each provisionable resource type.
+	storeRegistry := workflow.NewStoreRegistry()
+	storeRegistry.Register("Cluster", handlers.NewDBStatusUpdater(db, "clusters"))
+	storeRegistry.Register("ComputeInstance", handlers.NewDBStatusUpdater(db, "compute_instances"))
+	storeRegistry.Register("VirtualNetwork", handlers.NewDBStatusUpdater(db, "virtual_networks"))
+	storeRegistry.Register("Subnet", handlers.NewDBStatusUpdater(db, "subnets"))
+	storeRegistry.Register("SecurityGroup", handlers.NewDBStatusUpdater(db, "security_groups"))
+	storeRegistry.Register("PublicIPPool", handlers.NewDBStatusUpdater(db, "public_ip_pools"))
+	storeRegistry.Register("PublicIP", handlers.NewDBStatusUpdater(db, "public_ips"))
+
+	statusCallback := workflow.MakeStatusCallback(storeRegistry)
 
 	// --- HTTP Server ---
 	addr := os.Getenv("OSAC_ADDR")
