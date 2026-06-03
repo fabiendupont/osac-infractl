@@ -139,6 +139,23 @@ func main() {
 	dispatcher := workflow.NewDispatcher(dispatchTable, executor, logger)
 	dispatcher.RegisterHooks(registry)
 
+	// Status polling callback — updates resource status when workflows complete.
+	statusCallback := func(ctx context.Context, tracked workflow.TrackedRun, run *workflow.Run) error {
+		phase := "Ready"
+		if run.Status == workflow.RunFailed {
+			phase = "Failed"
+		}
+		logger.Info().
+			Str("resource_type", tracked.ResourceType).
+			Str("name", tracked.Name).
+			Str("phase", phase).
+			Msg("workflow completed, updating resource status")
+		// Status updates will be wired to PartialUpdate per resource type
+		// once resource type → store mapping is implemented.
+		return nil
+	}
+	_ = statusCallback
+
 	// --- HTTP Server ---
 	addr := os.Getenv("OSAC_ADDR")
 	if addr == "" {
@@ -165,6 +182,7 @@ func main() {
 
 	bus.StartCleanup(ctx, 7*24*time.Hour, 1*time.Hour)
 	queue.StartRecovery(ctx, 15*time.Minute, 1*time.Minute)
+	dispatcher.StartPolling(ctx, 10*time.Second, statusCallback)
 
 	httpSrv := srv.HTTPServer()
 	go func() {
