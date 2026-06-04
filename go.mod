@@ -3,9 +3,10 @@ module github.com/osac-project/osac-infractl
 go 1.25.0
 
 require (
-	github.com/fabiendupont/infractl v0.0.0
-	github.com/fabiendupont/infractl-executor-aap v0.0.0
+	github.com/fabiendupont/infractl v0.1.0
+	github.com/fabiendupont/infractl-executor-aap v0.1.0
 	github.com/go-chi/chi/v5 v5.2.1
+	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
@@ -39,7 +40,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.9.2 // indirect
@@ -108,9 +108,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
-)
-
-replace (
-	github.com/fabiendupont/infractl => /home/fdupont/Code/github.com/fabiendupont/infractl
-	github.com/fabiendupont/infractl-executor-aap => /home/fdupont/Code/github.com/fabiendupont/infractl-executor-aap
 )
