@@ -34,6 +34,7 @@ import (
 	aap "github.com/fabiendupont/infractl-executor-aap"
 
 	"github.com/osac-project/osac-infractl/hub"
+	"github.com/osac-project/osac-infractl/idp"
 	"github.com/osac-project/osac-infractl/providers/cluster"
 	"github.com/osac-project/osac-infractl/providers/computeinstance"
 	"github.com/osac-project/osac-infractl/providers/hosttype"
@@ -115,16 +116,20 @@ func main() {
 	}
 
 	hooks := provider.NewHookRunner(registry, logger)
+
+	identityProvider := setupIdentityProvider(logger)
+
 	provCtx := provider.Context{
-		DB:            db,
-		Registry:      registry,
-		Hooks:         hooks,
-		Logger:        logger,
-		APIPrefix:     "/api/v1",
-		Bus:           bus,
-		Queue:         queue,
-		DispatchTable: dispatchTable,
-		Executor:      executor,
+		DB:               db,
+		Registry:         registry,
+		Hooks:            hooks,
+		Logger:           logger,
+		APIPrefix:        "/api/v1",
+		Bus:              bus,
+		Queue:            queue,
+		DispatchTable:    dispatchTable,
+		Executor:         executor,
+		IdentityProvider: identityProvider,
 	}
 
 	if err := registry.InitAll(provCtx); err != nil {
@@ -284,4 +289,20 @@ func setupAAP(logger zerolog.Logger) (workflow.Executor, error) {
 	return aap.NewExecutor(client, logger, aap.ExecutorConfig{
 		MaxInFlight: maxInFlight,
 	}), nil
+}
+
+func setupIdentityProvider(logger zerolog.Logger) auth.IdentityProvider {
+	keycloakURL := os.Getenv("KEYCLOAK_URL")
+	if keycloakURL == "" {
+		logger.Info().Msg("KEYCLOAK_URL not set, using no-op identity provider")
+		return &auth.NoOpIdentityProvider{}
+	}
+
+	logger.Info().Str("url", keycloakURL).Msg("using Keycloak identity provider")
+	return idp.NewKeycloakProvider(idp.KeycloakConfig{
+		BaseURL:      keycloakURL,
+		ClientID:     os.Getenv("KEYCLOAK_CLIENT_ID"),
+		ClientSecret: os.Getenv("KEYCLOAK_CLIENT_SECRET"),
+		AdminRealm:   os.Getenv("KEYCLOAK_ADMIN_REALM"),
+	})
 }

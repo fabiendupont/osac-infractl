@@ -3,7 +3,7 @@ module github.com/osac-project/osac-infractl
 go 1.25.0
 
 require (
-	github.com/fabiendupont/infractl v0.1.0
+	github.com/fabiendupont/infractl v0.2.0
 	github.com/fabiendupont/infractl-executor-aap v0.1.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/google/uuid v1.6.0
