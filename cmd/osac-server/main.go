@@ -33,6 +33,7 @@ import (
 
 	aap "github.com/fabiendupont/infractl-executor-aap"
 
+	"github.com/osac-project/osac-infractl/hub"
 	"github.com/osac-project/osac-infractl/providers/cluster"
 	"github.com/osac-project/osac-infractl/providers/computeinstance"
 	"github.com/osac-project/osac-infractl/providers/hosttype"
@@ -130,9 +131,30 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to initialize providers")
 	}
 
-	// Let WorkflowProviders register their actions.
-	for _, wp := range registry.WorkflowProviders() {
-		wp.RegisterActions(dispatchTable)
+	// Populate dispatch table: try Hub discovery, fall back to static registration.
+	var hubDiscovery *hub.Discovery
+	if hubURL := os.Getenv("AUTOMATION_HUB_URL"); hubURL != "" {
+		hubClient := hub.NewClient(hub.ClientConfig{
+			BaseURL:    hubURL,
+			Token:      os.Getenv("AUTOMATION_HUB_TOKEN"),
+			Namespaces: []string{"osac", "netris", "massopencloud"},
+		})
+		hubDiscovery = hub.NewDiscovery(hubClient, dispatchTable, hub.DiscoveryConfig{}, logger)
+		actions, err := hubDiscovery.Discover(context.Background())
+		if err != nil {
+			logger.Warn().Err(err).Msg("Hub discovery failed, falling back to static actions")
+			hubDiscovery = nil
+			for _, wp := range registry.WorkflowProviders() {
+				wp.RegisterActions(dispatchTable)
+			}
+		} else {
+			logger.Info().Int("actions", actions).Msg("dispatch table populated from Hub")
+		}
+	} else {
+		logger.Info().Msg("AUTOMATION_HUB_URL not set, using static action registration")
+		for _, wp := range registry.WorkflowProviders() {
+			wp.RegisterActions(dispatchTable)
+		}
 	}
 
 	// Create the dispatcher and register hooks so lifecycle events
@@ -179,6 +201,9 @@ func main() {
 	bus.StartCleanup(ctx, 7*24*time.Hour, 1*time.Hour)
 	queue.StartRecovery(ctx, 15*time.Minute, 1*time.Minute)
 	dispatcher.StartPolling(ctx, 10*time.Second, statusCallback)
+	if hubDiscovery != nil {
+		hubDiscovery.StartRefresh(ctx)
+	}
 
 	httpSrv := srv.HTTPServer()
 	go func() {
