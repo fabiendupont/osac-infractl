@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/fabiendupont/infractl/provider"
@@ -44,6 +45,23 @@ func (p *SubnetProvider) Init(ctx provider.Context) error {
 	if err := ctx.DB.AutoMigrate(&Subnet{}); err != nil {
 		return err
 	}
+
+	if ctx.Registry != nil {
+		ctx.Registry.RegisterRef(provider.ResourceRef{
+			Source:   ResourceType,
+			Field:    "spec.virtual_network",
+			Target:   "VirtualNetwork",
+			Table:    "virtual_networks",
+			Required: true,
+			Extract: func(payload interface{}) (uuid.UUID, string) {
+				if s, ok := payload.(*Subnet); ok {
+					return s.OrgID, s.Spec.Data.VirtualNetwork
+				}
+				return uuid.Nil, ""
+			},
+		}, ctx.DB)
+	}
+
 	p.logger.Info().Msg("subnet provider initialized")
 	return nil
 }

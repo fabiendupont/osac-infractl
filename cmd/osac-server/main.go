@@ -27,12 +27,12 @@ import (
 	"github.com/fabiendupont/infractl/platform/tenant"
 	"github.com/fabiendupont/infractl/platform/webhook"
 	"github.com/fabiendupont/infractl/provider"
+	"github.com/fabiendupont/infractl/resource"
 	"github.com/fabiendupont/infractl/work"
 	"github.com/fabiendupont/infractl/workflow"
 
 	aap "github.com/fabiendupont/infractl-executor-aap"
 
-	"github.com/osac-project/osac-infractl/handlers"
 	"github.com/osac-project/osac-infractl/providers/cluster"
 	"github.com/osac-project/osac-infractl/providers/computeinstance"
 	"github.com/osac-project/osac-infractl/providers/hosttype"
@@ -142,13 +142,13 @@ func main() {
 
 	// Register status updaters for each provisionable resource type.
 	storeRegistry := workflow.NewStoreRegistry()
-	storeRegistry.Register("Cluster", handlers.NewDBStatusUpdater(db, "clusters"))
-	storeRegistry.Register("ComputeInstance", handlers.NewDBStatusUpdater(db, "compute_instances"))
-	storeRegistry.Register("VirtualNetwork", handlers.NewDBStatusUpdater(db, "virtual_networks"))
-	storeRegistry.Register("Subnet", handlers.NewDBStatusUpdater(db, "subnets"))
-	storeRegistry.Register("SecurityGroup", handlers.NewDBStatusUpdater(db, "security_groups"))
-	storeRegistry.Register("PublicIPPool", handlers.NewDBStatusUpdater(db, "public_ip_pools"))
-	storeRegistry.Register("PublicIP", handlers.NewDBStatusUpdater(db, "public_ips"))
+	storeRegistry.Register("Cluster", resource.NewStatusUpdater(db, "clusters"))
+	storeRegistry.Register("ComputeInstance", resource.NewStatusUpdater(db, "compute_instances"))
+	storeRegistry.Register("VirtualNetwork", resource.NewStatusUpdater(db, "virtual_networks"))
+	storeRegistry.Register("Subnet", resource.NewStatusUpdater(db, "subnets"))
+	storeRegistry.Register("SecurityGroup", resource.NewStatusUpdater(db, "security_groups"))
+	storeRegistry.Register("PublicIPPool", resource.NewStatusUpdater(db, "public_ip_pools"))
+	storeRegistry.Register("PublicIP", resource.NewStatusUpdater(db, "public_ips"))
 
 	statusCallback := workflow.MakeStatusCallback(storeRegistry)
 

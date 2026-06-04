@@ -306,3 +306,87 @@ func TestTenantIsolation(t *testing.T) {
 	readBody(t, resp)
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
+
+// --- Cross-resource validation ---
+
+func TestSubnetWithoutVirtualNetworkRejected(t *testing.T) {
+	baseURL, exec, cleanup := testutil.SetupOSACServer(t)
+	defer cleanup()
+	registerStubHandlers(exec)
+
+	headers := map[string]string{"X-Org-ID": defaultTenant}
+
+	// Create subnet referencing a nonexistent virtual network.
+	payload := map[string]interface{}{
+		"name": "orphan-subnet",
+		"spec": map[string]interface{}{"Data": map[string]interface{}{
+			"virtual_network": "does-not-exist", "ipv4_cidr": "10.0.0.0/24",
+		}},
+	}
+
+	resp := doRequest(t, http.MethodPost, baseURL+"/api/v1/subnets", payload, headers)
+	body := readBody(t, resp)
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "body: %s", string(body))
+	assert.Contains(t, string(body), "not found")
+}
+
+func TestSecurityGroupWithoutVirtualNetworkRejected(t *testing.T) {
+	baseURL, exec, cleanup := testutil.SetupOSACServer(t)
+	defer cleanup()
+	registerStubHandlers(exec)
+
+	headers := map[string]string{"X-Org-ID": defaultTenant}
+
+	payload := map[string]interface{}{
+		"name": "orphan-sg",
+		"spec": map[string]interface{}{"Data": map[string]interface{}{
+			"virtual_network": "nonexistent",
+		}},
+	}
+
+	resp := doRequest(t, http.MethodPost, baseURL+"/api/v1/security-groups", payload, headers)
+	body := readBody(t, resp)
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "body: %s", string(body))
+}
+
+func TestPublicIPWithoutPoolRejected(t *testing.T) {
+	baseURL, exec, cleanup := testutil.SetupOSACServer(t)
+	defer cleanup()
+	registerStubHandlers(exec)
+
+	headers := map[string]string{"X-Org-ID": defaultTenant}
+
+	payload := map[string]interface{}{
+		"name": "orphan-ip",
+		"spec": map[string]interface{}{"Data": map[string]interface{}{
+			"pool": "nonexistent-pool",
+		}},
+	}
+
+	resp := doRequest(t, http.MethodPost, baseURL+"/api/v1/public-ips", payload, headers)
+	body := readBody(t, resp)
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "body: %s", string(body))
+}
+
+func TestClusterWithInvalidHostTypeRejected(t *testing.T) {
+	baseURL, exec, cleanup := testutil.SetupOSACServer(t)
+	defer cleanup()
+	registerStubHandlers(exec)
+
+	headers := map[string]string{"X-Org-ID": defaultTenant}
+
+	payload := map[string]interface{}{
+		"name": "bad-cluster",
+		"spec": map[string]interface{}{"Data": map[string]interface{}{
+			"release_image": "quay.io/openshift:4.16",
+			"node_sets": []interface{}{
+				map[string]interface{}{"name": "workers", "host_type": "nonexistent", "replicas": 3},
+			},
+		}},
+	}
+
+	resp := doRequest(t, http.MethodPost, baseURL+"/api/v1/clusters", payload, headers)
+	body := readBody(t, resp)
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "body: %s", string(body))
+	assert.Contains(t, string(body), "not found")
+}

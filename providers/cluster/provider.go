@@ -5,9 +5,11 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
+	"gorm.io/gorm"
 
 	"github.com/fabiendupont/infractl/provider"
 	"github.com/fabiendupont/infractl/resource"
@@ -44,8 +46,44 @@ func (p *ClusterProvider) Init(ctx provider.Context) error {
 	if err := ctx.DB.AutoMigrate(&Cluster{}); err != nil {
 		return err
 	}
+
+	// Validate that all referenced HostTypes exist.
+	if ctx.Registry != nil {
+		db := ctx.DB
+		ctx.Registry.RegisterHook(provider.SyncHook{
+			Feature: ResourceType,
+			Event:   "pre_create",
+			Handler: validateClusterHostTypes(db),
+		})
+	}
+
 	p.logger.Info().Msg("cluster provider initialized")
 	return nil
+}
+
+func validateClusterHostTypes(db *gorm.DB) func(context.Context, interface{}) error {
+	return func(ctx context.Context, payload interface{}) error {
+		c, ok := payload.(*Cluster)
+		if !ok {
+			return nil
+		}
+		for _, ns := range c.Spec.Data.NodeSets {
+			if ns.HostType == "" {
+				continue
+			}
+			var count int64
+			if err := db.WithContext(ctx).
+				Table("host_types").
+				Where("org_id = ? AND name = ? AND deleted_at IS NULL", c.OrgID, ns.HostType).
+				Count(&count).Error; err != nil {
+				return fmt.Errorf("validating node_sets.host_type: %w", err)
+			}
+			if count == 0 {
+				return fmt.Errorf("HostType %q not found (referenced by node_sets[%s])", ns.HostType, ns.Name)
+			}
+		}
+		return nil
+	}
 }
 
 func (p *ClusterProvider) Shutdown(_ context.Context) error { return nil }

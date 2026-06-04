@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/fabiendupont/infractl/provider"
@@ -26,7 +27,6 @@ type SecurityGroupProvider struct {
 }
 
 func New() *SecurityGroupProvider { return &SecurityGroupProvider{} }
-
 func (p *SecurityGroupProvider) Name() string           { return "securitygroup" }
 func (p *SecurityGroupProvider) Version() string        { return "0.1.0" }
 func (p *SecurityGroupProvider) Features() []string     { return []string{"securitygroup"} }
@@ -44,15 +44,26 @@ func (p *SecurityGroupProvider) Init(ctx provider.Context) error {
 	if err := ctx.DB.AutoMigrate(&SecurityGroup{}); err != nil {
 		return err
 	}
+
+	if ctx.Registry != nil {
+		ctx.Registry.RegisterRef(provider.ResourceRef{
+			Source: ResourceType, Field: "spec.virtual_network",
+			Target: "VirtualNetwork", Table: "virtual_networks", Required: true,
+			Extract: func(payload interface{}) (uuid.UUID, string) {
+				if sg, ok := payload.(*SecurityGroup); ok {
+					return sg.OrgID, sg.Spec.Data.VirtualNetwork
+				}
+				return uuid.Nil, ""
+			},
+		}, ctx.DB)
+	}
+
 	p.logger.Info().Msg("security group provider initialized")
 	return nil
 }
 
 func (p *SecurityGroupProvider) Shutdown(_ context.Context) error { return nil }
-
-func (p *SecurityGroupProvider) RegisterRoutes(r chi.Router) {
-	p.crud.RegisterRoutes(r, "/security-groups")
-}
+func (p *SecurityGroupProvider) RegisterRoutes(r chi.Router) { p.crud.RegisterRoutes(r, "/security-groups") }
 
 func (p *SecurityGroupProvider) RegisterActions(table *workflow.DispatchTable) {
 	table.Register(workflow.Handler{

@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/fabiendupont/infractl/provider"
@@ -26,7 +27,6 @@ type PublicIPProvider struct {
 }
 
 func New() *PublicIPProvider { return &PublicIPProvider{} }
-
 func (p *PublicIPProvider) Name() string           { return "publicip" }
 func (p *PublicIPProvider) Version() string        { return "0.1.0" }
 func (p *PublicIPProvider) Features() []string     { return []string{"publicip"} }
@@ -44,15 +44,26 @@ func (p *PublicIPProvider) Init(ctx provider.Context) error {
 	if err := ctx.DB.AutoMigrate(&PublicIP{}); err != nil {
 		return err
 	}
+
+	if ctx.Registry != nil {
+		ctx.Registry.RegisterRef(provider.ResourceRef{
+			Source: ResourceType, Field: "spec.pool",
+			Target: "PublicIPPool", Table: "public_ip_pools", Required: true,
+			Extract: func(payload interface{}) (uuid.UUID, string) {
+				if ip, ok := payload.(*PublicIP); ok {
+					return ip.OrgID, ip.Spec.Data.Pool
+				}
+				return uuid.Nil, ""
+			},
+		}, ctx.DB)
+	}
+
 	p.logger.Info().Msg("public IP provider initialized")
 	return nil
 }
 
 func (p *PublicIPProvider) Shutdown(_ context.Context) error { return nil }
-
-func (p *PublicIPProvider) RegisterRoutes(r chi.Router) {
-	p.crud.RegisterRoutes(r, "/public-ips")
-}
+func (p *PublicIPProvider) RegisterRoutes(r chi.Router) { p.crud.RegisterRoutes(r, "/public-ips") }
 
 func (p *PublicIPProvider) RegisterActions(table *workflow.DispatchTable) {
 	table.Register(workflow.Handler{
