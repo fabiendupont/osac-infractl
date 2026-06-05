@@ -35,6 +35,7 @@ import (
 
 	"github.com/osac-project/osac-infractl/hub"
 	"github.com/osac-project/osac-infractl/idp"
+	"github.com/osac-project/osac-infractl/providers/blueprint"
 	"github.com/osac-project/osac-infractl/providers/cluster"
 	"github.com/osac-project/osac-infractl/providers/computeinstance"
 	"github.com/osac-project/osac-infractl/providers/hosttype"
@@ -88,6 +89,7 @@ func main() {
 		hosttype.New(),
 		networkclass.New(),
 		project.New(),
+		blueprint.New(),
 		virtualnetwork.New(),
 		subnet.New(),
 		securitygroup.New(),
